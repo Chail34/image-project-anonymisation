@@ -1,0 +1,10 @@
+
+
+riddle-article:
+  type: article
+  title: "RiDDLE: Reversible and Diversified De-identification with Latent Encryptor"
+  author: ["Dongze Li", "Wei Wang", "Kang Zhao", "Jing Dong", "Tieniu Tan", "School of Artificial Intelligence", U"niversity of Chinese Academy of Sciences Center for Research on Intelligent Perception and Computing", "CASIA Alibaba Group", "Nanjing University"]
+  date: 2023
+  url: https://arxiv.org/pdf/2303.05171
+    
+
