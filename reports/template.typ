@@ -89,7 +89,7 @@
  show link: it => if type(it.dest) == str { text(fill: aqua.darken(15%), underline(it)) } else { it }
 
  // Figure formatting
- show figure.where(kind: raw): set figure(supplement: [#context _stl_tr("code")])
+ show figure.where(kind: raw): set figure(supplement: [Code])
  show figure: it => {
   set par(spacing: 5pt)
   it

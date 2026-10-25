@@ -3,8 +3,27 @@
 riddle-article:
   type: article
   title: "RiDDLE: Reversible and Diversified De-identification with Latent Encryptor"
-  author: ["Dongze Li", "Wei Wang", "Kang Zhao", "Jing Dong", "Tieniu Tan", "School of Artificial Intelligence", U"niversity of Chinese Academy of Sciences Center for Research on Intelligent Perception and Computing", "CASIA Alibaba Group", "Nanjing University"]
+  author: ["Li, Dongze", "Wang, Wei", "Zhao, Kang", "Dong, Jing", "Tan, Tieniu"]
   date: 2023
   url: https://arxiv.org/pdf/2303.05171
-    
 
+arcface:
+  type: article
+  title: "ArcFace: Additive Angular Margin Loss for Deep Face Recognition"
+  author: ["Deng, Jiankang", "Guo, Jia", "Xue, Niannan", "Zafeiriou, Stefanos"]
+  date: 2019
+  url: https://openaccess.thecvf.com/content_CVPR_2019/papers/Deng_ArcFace_Additive_Angular_Margin_Loss_for_Deep_Face_Recognition_CVPR_2019_paper.pdf
+
+live-face-deid:
+  type: article
+  title: "Live Face De-Identification in Video"
+  author: ["Gafni, Oran", "Wolf, Lior", "Taigman, Yaniv"]
+  date: 2019
+  url: https://openaccess.thecvf.com/content_ICCV_2019/papers/Gafni_Live_Face_De-Identification_in_Video_ICCV_2019_paper.pdf
+
+ciagan:
+  type: article
+  title: "CIAGAN: Conditional Identity Anonymization Generative Adversarial Networks"
+  author: ["Maximov, Maxim", "Elezi, Ismail", "Leal-Taixé, Laura"]
+  date: 2020
+  url: https://arxiv.org/pdf/2005.09544
