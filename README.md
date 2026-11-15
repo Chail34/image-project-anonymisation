@@ -8,6 +8,6 @@
 
 - Développer un GAN composé d'un générateur et d'un discriminateur
 
-## Localisation des compte-rendu hebdomadaire
+## Localisation des compte-rendus hebdomadaires
 
 `~/documents/reports/pdf/report_<weekID>`
