@@ -1,113 +1,127 @@
+import os
+import time
 import tensorflow as tf
 import tensorflow.keras as keras
 import tensorflow_datasets as tfds
 import matplotlib.pyplot as plt
+from IPython import display
 
-BATCH_SIZE = 256
-BUFFER_SIZE = 60000
+# Paramètres globaux
+BATCH_SIZE = 64
+BUFFER_SIZE = 15000
+EPOCHS = 50
+noise_dim = 100
+num_examples_to_generate = 16
 
-# Chargement des données dans le dataset
+# Fonction de prétraitement : redimensionnement 128x128 et normalisation dans [-1, 1]
+def preprocess_image(label, image):
+    image = tf.image.resize(image, [128, 128])
+    image = (tf.cast(image, tf.float32) - 127.5) / 127.5
+    return image
+
+# Chargement, prétraitement, mélange et création des batchs
 face_dataset = tfds.load(
-  'lfw',
-  split='train',
-  batch_size= BATCH_SIZE,
-  as_supervised=True,
-  shuffle_files=True
+    'lfw',
+    split='train',
+    as_supervised=True,
+    shuffle_files=True
 )
 
-face_dataset.shuffle(BUFFER_SIZE)
+face_dataset = (
+    face_dataset
+    .map(preprocess_image, num_parallel_calls=tf.data.AUTOTUNE)
+    .cache()
+    .shuffle(BUFFER_SIZE)
+    .batch(BATCH_SIZE, drop_remainder=True)
+    .prefetch(tf.data.AUTOTUNE)
+)
 
-for image, label in face_dataset.take(1):
-  print(image.shape)
+# Vérification de la forme d'un batch
+for image_batch in face_dataset.take(1):
+    print("Forme du batch d'images :", image_batch.shape)
 
+# Création du Générateur
 def createGenerator():
-    generator = keras.Sequential()
+    generator = keras.Sequential([
+        # Entrée : vecteur de bruit de taille 100 -> 8 * 8 * 512
+        keras.layers.Dense(8 * 8 * 512, use_bias=False, input_shape=(100,)),
+        keras.layers.BatchNormalization(),
+        keras.layers.LeakyReLU(),
+        keras.layers.Reshape((8, 8, 512)),
 
-    # Entrée : vecteur de bruit de taille 100. Projection vers 8 * 8 * 512
-    generator.add(keras.layers.Dense(8 * 8 * 512, use_bias=False, input_shape=(100,)))
-    generator.add(keras.layers.BatchNormalization())
-    generator.add(keras.layers.LeakyReLU())
+        # 16 * 16 * 256
+        keras.layers.Conv2DTranspose(256, (5, 5), strides=(2, 2), padding='same', use_bias=False),
+        keras.layers.BatchNormalization(),
+        keras.layers.LeakyReLU(),
 
-    # Redimensionnement vers un volume 3D
-    generator.add(keras.layers.Reshape((8, 8, 512)))
+        # 32 * 32 * 128
+        keras.layers.Conv2DTranspose(128, (5, 5), strides=(2, 2), padding='same', use_bias=False),
+        keras.layers.BatchNormalization(),
+        keras.layers.LeakyReLU(),
 
-    # Taille : 16 * 16 * 256
-    generator.add(keras.layers.Conv2DTranspose(256, (5, 5), strides=(2, 2), padding='same', use_bias=False))
-    generator.add(keras.layers.BatchNormalization())
-    generator.add(keras.layers.LeakyReLU())
+        # 64 * 64 * 64
+        keras.layers.Conv2DTranspose(64, (5, 5), strides=(2, 2), padding='same', use_bias=False),
+        keras.layers.BatchNormalization(),
+        keras.layers.LeakyReLU(),
 
-    # Taille : 32 * 32 * 128
-    generator.add(keras.layers.Conv2DTranspose(128, (5, 5), strides=(2, 2), padding='same', use_bias=False))
-    generator.add(keras.layers.BatchNormalization())
-    generator.add(keras.layers.LeakyReLU())
-
-    # Taille : 64 * 64 * 64
-    generator.add(keras.layers.Conv2DTranspose(64, (5, 5), strides=(2, 2), padding='same', use_bias=False))
-    generator.add(keras.layers.BatchNormalization())
-    generator.add(keras.layers.LeakyReLU())
-
-    # Taille finale : 128 * 128 * 3 (image RGB couleur pour les visages)
-    generator.add(keras.layers.Conv2DTranspose(3, (5, 5), strides=(2, 2), padding='same', use_bias=False, activation='tanh'))
-
+        # Sortie finale : 128 * 128 * 3 (valeurs entre -1 et 1 grâce à tanh)
+        keras.layers.Conv2DTranspose(3, (5, 5), strides=(2, 2), padding='same', use_bias=False, activation='tanh')
+    ])
     return generator
 
+# Création du Discriminateur
 def createDiscriminator():
-    discriminator = keras.Sequential()
+    discriminator = keras.Sequential([
+        # Entrée : 128 * 128 * 3 -> 64 * 64 * 64
+        keras.layers.Conv2D(64, (5, 5), strides=(2, 2), padding='same', input_shape=[128, 128, 3]),
+        keras.layers.LeakyReLU(),
+        keras.layers.Dropout(0.3),
 
-    # Entrée : Image de taille 128 * 128 * 3
-    discriminator.add(keras.layers.Conv2D(64, (5, 5), strides=(2, 2), padding='same', input_shape=[128, 128, 3]))
-    discriminator.add(keras.layers.LeakyReLU())
-    discriminator.add(keras.layers.Dropout(0.3))
+        # 32 * 32 * 128
+        keras.layers.Conv2D(128, (5, 5), strides=(2, 2), padding='same'),
+        keras.layers.LeakyReLU(),
+        keras.layers.Dropout(0.3),
 
-    # Taille : 64 * 64 * 128
-    discriminator.add(keras.layers.Conv2D(128, (5, 5), strides=(2, 2), padding='same'))
-    discriminator.add(keras.layers.LeakyReLU())
-    discriminator.add(keras.layers.Dropout(0.3))
+        # 16 * 16 * 256
+        keras.layers.Conv2D(256, (5, 5), strides=(2, 2), padding='same'),
+        keras.layers.LeakyReLU(),
+        keras.layers.Dropout(0.3),
 
-    # Taille : 32 * 32 * 256
-    discriminator.add(keras.layers.Conv2D(256, (5, 5), strides=(2, 2), padding='same'))
-    discriminator.add(keras.layers.LeakyReLU())
-    discriminator.add(keras.layers.Dropout(0.3))
+        # 8 * 8 * 512
+        keras.layers.Conv2D(512, (5, 5), strides=(2, 2), padding='same'),
+        keras.layers.LeakyReLU(),
+        keras.layers.Dropout(0.3),
 
-    # Taille : 16 * 16 * 512
-    discriminator.add(keras.layers.Conv2D(512, (5, 5), strides=(2, 2), padding='same'))
-    discriminator.add(keras.layers.LeakyReLU())
-    discriminator.add(keras.layers.Dropout(0.3))
-
-    # Aplatissement et classification finale (1 pour vrai, 0 pour faux)
-    discriminator.add(keras.layers.Flatten())
-    discriminator.add(keras.layers.Dense(1, activation='sigmoid'))
-
+        # Classification finale (logits bruts, sans activation sigmoid)
+        keras.layers.Flatten(),
+        keras.layers.Dense(1)
+    ])
     return discriminator
 
+# Fonctions de perte (Loss)
 cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 
 def discriminator_loss(real_output, fake_output):
-    real_loss = cross_entropy(tf.ones_like(real_output), real_output)
+    # Label smoothing (0.9) pour éviter que le discriminateur ne devienne trop confiant
+    real_loss = cross_entropy(tf.ones_like(real_output) * 0.9, real_output)
     fake_loss = cross_entropy(tf.zeros_like(fake_output), fake_output)
-    total_loss = real_loss + fake_loss
-    return total_loss
+    return real_loss + fake_loss
 
 def generator_loss(fake_output):
     return cross_entropy(tf.ones_like(fake_output), fake_output)
 
-generator_optimizer = tf.keras.optimizers.Adam(1e-4)
-discriminator_optimizer = tf.keras.optimizers.Adam(1e-4)
-
-import time
-from IPython import display
+# Optimiseurs Adam réglés avec beta_1=0.5 (recommandé pour les DCGAN)
+generator_optimizer = tf.keras.optimizers.Adam(learning_rate=2e-4, beta_1=0.5)
+discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=2e-4, beta_1=0.5)
 
 # Instanciation des modèles
 generator = createGenerator()
 discriminator = createDiscriminator()
 
-EPOCHS = 50
-noise_dim = 100
-num_examples_to_generate = 16
-
-# Nous gardons un bruit constant pour visualiser l'évolution des performances du générateur
+# Graine fixe pour suivre l'évolution visuelle sur les mêmes vecteurs latents
 seed = tf.random.normal([num_examples_to_generate, noise_dim])
 
+# Étape d'entraînement compilée
 @tf.function
 def train_step(images):
     noise = tf.random.normal([BATCH_SIZE, noise_dim])
@@ -127,57 +141,61 @@ def train_step(images):
     generator_optimizer.apply_gradients(zip(gradients_of_generator, generator.trainable_variables))
     discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator, discriminator.trainable_variables))
 
+    return gen_loss, disc_loss
+
+# Génération et sauvegarde des images de suivi
 def generate_and_save_images(model, epoch, test_input):
-    # Nous mettons training à False pour désactiver le mode entraînement des couches de Batch Normalization
     predictions = model(test_input, training=False)
 
     fig = plt.figure(figsize=(4, 4))
 
     for i in range(predictions.shape[0]):
         plt.subplot(4, 4, i+1)
-        # Re-convertir de [-1, 1] vers [0, 1] pour l'affichage de l'image
-        plt.imshow((predictions[i] + 1.0) / 2.0)
+        # Re-convertir de [-1, 1] vers [0, 1] et sécuriser les bornes avec clip_by_value
+        img = tf.clip_by_value((predictions[i] + 1.0) / 2.0, 0.0, 1.0)
+        plt.imshow(img)
         plt.axis('off')
 
     plt.savefig('image_at_epoch_{:04d}.png'.format(epoch))
     plt.show()
 
+# Configuration des checkpoints
+checkpoint_dir = './training_checkpoints'
+checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
+checkpoint = tf.train.Checkpoint(
+    generator_optimizer=generator_optimizer,
+    discriminator_optimizer=discriminator_optimizer,
+    generator=generator,
+    discriminator=discriminator
+)
+
+# Boucle principale d'entraînement
 def train(dataset, epochs):
     for epoch in range(epochs):
         start = time.time()
+        total_gen_loss = 0.0
+        total_disc_loss = 0.0
+        num_batches = 0
 
-        # Inversion ici : le dataset LFW renvoie (label, image) avec as_supervised=True
-        for _, image_batch in dataset:
-            # Les images d'origine doivent être redimensionnées à 128x128 et normalisées dans [-1, 1]
-            # correspondant au format attendu par le discriminateur et produit par le générateur
-            image_batch = tf.image.resize(image_batch, [128, 128])
-            image_batch = (tf.cast(image_batch, tf.float32) - 127.5) / 127.5
+        for image_batch in dataset:
+            g_loss, d_loss = train_step(image_batch)
+            total_gen_loss += g_loss
+            total_disc_loss += d_loss
+            num_batches += 1
 
-            # Pour s'assurer que le dernier batch incomplet ne lève pas d'erreur sur la taille de BATCH_SIZE
-            if image_batch.shape[0] == BATCH_SIZE:
-                train_step(image_batch)
-
-        # Produire des images pour visualiser l'apprentissage
+        # Affichage des images générées à chaque époque
         display.clear_output(wait=True)
         generate_and_save_images(generator, epoch + 1, seed)
 
-        print ('Temps pour l\'époque {} est de {} sec'.format(epoch + 1, time.time()-start))
+        # Sauvegarde d'un checkpoint toutes les 5 époques
+        if (epoch + 1) % 5 == 0:
+            checkpoint.save(file_prefix=checkpoint_prefix)
 
-    # Générer après la dernière époque
-    display.clear_output(wait=True)
-    generate_and_save_images(generator, epochs, seed)
+        print(f"Époque {epoch + 1}/{epochs} - Temps: {time.time()-start:.2f}s | "
+              f"Gen Loss: {total_gen_loss/num_batches:.4f} | "
+              f"Disc Loss: {total_disc_loss/num_batches:.4f}")
 
-import os
-
-# Configuration de la sauvegarde et du chargement des checkpoints
-checkpoint_dir = './training_checkpoints'
-checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
-checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
-                                 discriminator_optimizer=discriminator_optimizer,
-                                 generator=generator,
-                                 discriminator=discriminator)
-
-# Restauration du dernier checkpoint disponible
+# Restauration éventuelle d'un checkpoint existant (à vider si d'anciens poids corrompus s'y trouvent)
 latest_checkpoint = tf.train.latest_checkpoint(checkpoint_dir)
 if latest_checkpoint:
     checkpoint.restore(latest_checkpoint)
