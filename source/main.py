@@ -9,7 +9,7 @@ from IPython import display
 # Paramètres globaux
 BATCH_SIZE = 64
 BUFFER_SIZE = 15000
-EPOCHS = 50
+EPOCHS = 300
 noise_dim = 100
 num_examples_to_generate = 16
 
