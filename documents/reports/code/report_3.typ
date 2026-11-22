@@ -19,7 +19,7 @@
 
 
 
-#let document-title = "Compte-rendu semaine 3 : Entrainement à la génération de visages d'un GAN"
+#let document-title = "Compte-rendu semaine 4 : Amélioration de l'architecture existante"
 
 
 
@@ -146,7 +146,7 @@
 	outlined: false,
 	"Introduction"
 )
-L'objectif de cette semaine de projet était de concevoir et de débuter l'entrainement d'un réseau de neurones antagoniste génératif profond _(Deep Convolutional Generative Adversarial Network)_ capable de générer des images réalistes de visages humains. Le projet s'appuie sur le jeu de données _LFW - (Labeled Faces in the Wild)_ dont une implémentation exploitable est fourni par TensorFlow Datasets.
+L'objectif de cette semaine de projet était d'ameliorer l'entrainement de notre réseau de neurones antagoniste génératif profond _(Deep Convolutional Generative Adversarial Network)_ capable de générer des images réalistes de visages humains et d'y ajouter les parties de traitement de clés et d'encodage. Le temps nous a un peu manqué mais nous avons pu a moins eprouver le modèle existant et commencer la programationd des autres réseaux.
 #double-space
 
 
@@ -174,52 +174,39 @@ L'objectif de cette semaine de projet était de concevoir et de débuter l'entra
 
 
 // ---------------- Document Begin --------------------
+= Changements des modèles existent
+	== Changements de Datasets
+		Nous utilisions à l'origine le jeu de données `lfw` chargé grâce au module `tensorflow_datasets`
+		Maintenant, nous utilisons le jeu de données `celebA` directement chargé depuis un dossier d'image.
+		Ce changement nous permet neanmoins de faire des époques plus éfficace, le datasets étant 15 fois plus grand.
 
-= Préparation et Pipeline de Données
-Le pipeline de chargement de données a été configuré de la manière suivante :
-- *Source* : Jeu de données `lfw` chargé via `tensorflow_datasets`.
-- *Hyperparamètres de données* : #[
-  - `BATCH_SIZE` = 256
-  - `BUFFER_SIZE` = 60000
-]
+	== Pré-traitements
+		Les images sont toutes redimensionnées à une taille de $128 times 128$ et les 3 canaux RGB sont changés d'intervalle 
+		$[0, 255] -> [-1, 1]$
 
-- *Prétraitement à la volée* lors de l'entraînement : #[
-  * Redimensionnement des images de leur taille d'origine (250x250) vers une taille standardisée de *128x128 pixels* afin d'adapter l'entrée aux dimensions de notre discriminateur.
-  * Normalisation des pixels dans l'intervalle *[-1, 1]* (requis par l'activation 
-  `tanh` de la couche de sortie du générateur).
-]
+	== Modification des modèles 
+		Les modèles ont été modifié. Pour évité les effets de damiers, les `ConvTranspose2D` ont été remplacées par une combinaison de 
+		`UpSampling2D` avec un filtrage `nearest`pour éviter le lissage des données et de `Conv2D`.
 
+	== Remarques
+		Les changements de datasets et des modèles ont entrainés une amélioration de la qualité des images générées mais on alourdi le temps
+		d'entrainement. Nous avons donc changé la fréquence d'enregistremnet des checkpoints de 5 a 2 épochs.
 
-= Architecture du Modèle
-Le système repose sur la confrontation de deux modèles distincts :
+	== Visualisation des changements
 
-== Le Générateur
-Son rôle est de transformer un vecteur de bruit aléatoire de dimension 100 en une image de visage de taille 128x128x3.
-- *Entrée* : Vecteur aléatoire (taille 100).
-- *Projection & Reshape* : Passage par une couche dense projetée en `8 * 8 * 512`, puis remodelée en un volume 3D.
-- *Suréchantillonnage (Upsampling)* : Quatre couches successives de convolutions transposées (`Conv2DTranspose`) doublant la taille spatiale à chaque étape ($8 times 8 -->; 16 times 16 -->; 32 times 32 -->; 64 times 64 -->; 128 times 128$).
-- *Régularisation et Activation* : Utilisation de `BatchNormalization` et de fonctions d'activation `LeakyReLU` pour stabiliser l'apprentissage. La couche finale utilise une activation `tanh`.
-
-== Le Discriminateur
-Son rôle est de classer les images reçues comme "réelles" (issues du dataset) ou "fausses" (créées par le générateur).
-- *Entrée* : Image de taille 128x128x3.
-- *Sous-échantillonnage (Downsampling)* : Quatre couches de convolutions standards (`Conv2D`) avec un pas (*stride*) de 2.
-- *Régularisation* : Utilisation de `Dropout(0.3)` pour éviter le surapprentissage du discriminateur face au générateur.
-- *Sortie* : Une valeur scalaire unique avec une activation `sigmoid` représentant la probabilité que l'image soit réelle.
-
-
-= Stratégie d'Entraînement et Fonctions de Perte
-- *Fonction de perte* : Entropie croisée binaire (`BinaryCrossentropy`).
-- *Optimiseurs* : Deux instances de l'optimiseur *Adam* avec un taux d'apprentissage de `1e-4` pour les deux réseaux.
-- *Boucle d'entraînement (`train_step`)* : #[
-  - Optimisation alternée et simultanée grâce aux `tf.GradientTape()` pour calculer et appliquer les gradients de manière indépendante pour le générateur et le discriminateur.
-  - Utilisation de checkpoints (`tf.train.Checkpoint`) permettant de sauvegarder et de restaurer l'état du modèle afin de prévenir les interruptions d'apprentissage.
-]
-
-
-= Observations
-L'entrainement prenant un certain temps, nous n'avons actuellement pas de résultat probant à montrer.
-
-De plus, Lors du lancement de l'entraînement, l'avertissement suivant a été émis par le framework :
-*`UserWarning: "binary_crossentropy" received "from_logits=True", but the "output" argument was produced by a Sigmoid activation and thus does not represent logits.`*
-Recherche active d'une solution à cette avertissement
+	#grid(
+		columns: (1fr),
+		gutter: 1em,
+		figure(
+			image("image/epoch100.webp", width: 100%),
+			caption:[Modèle d'origine après 50 épochs],
+		),
+		figure(
+			image("image/epoch15.png", width: 90%),
+			caption: [Nouveau modèle après 15 épochs],
+		),
+		figure(
+			image("image/epoch50.png", width: 100%),
+			caption: [Nouveau modèle après 50 épochs],
+		),
+	)
