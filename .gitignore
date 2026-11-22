@@ -7,10 +7,15 @@ __pycache__/
 *.so
 *.png
 
+*/dataset
+*/generated-image/
+*/training_checkpoint/
+
+
 # Distribution / packaging
 .Python
 build/
-*/training_checkpoints/
+
 develop-eggs/
 dist/
 downloads/

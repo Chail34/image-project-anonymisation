@@ -2,11 +2,20 @@
 
 ## Objectifs
 
-- Développer un encodeur
+Développer un model d'anonymisation des visages réversible composé de :
+- D'un auto-encodeur
+- D'un discriminateur
+- D'un encryptor/decryptor de vecteurs latent
 
-- Développer un auto-encodeur
 
-- Développer un GAN composé d'un générateur et d'un discriminateur
+## Lancer l'entrainement
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 train.py
+```
 
 ## Localisation des compte-rendus hebdomadaires
 
