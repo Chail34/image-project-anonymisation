@@ -229,3 +229,8 @@ __marimo__/
 # Markdown
 *.md
 !README.md
+
+# Chiffreur latent (source/anon) : entraînements, poids pré-entraînés et photos personnelles
+source/anon/runs/
+weights/
+mes_photos/

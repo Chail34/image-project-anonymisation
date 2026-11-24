@@ -27,3 +27,31 @@ ciagan:
   author: ["Maximov, Maxim", "Elezi, Ismail", "Leal-Taixé, Laura"]
   date: 2020
   url: https://arxiv.org/pdf/2005.09544
+
+stylegan2:
+  type: article
+  title: "Analyzing and Improving the Image Quality of StyleGAN"
+  author: ["Karras, Tero", "Laine, Samuli", "Aittala, Miika", "Hellsten, Janne", "Lehtinen, Jaakko", "Aila, Timo"]
+  date: 2020
+  url: https://arxiv.org/abs/1912.04958
+
+e4e:
+  type: article
+  title: "Designing an Encoder for StyleGAN Image Manipulation"
+  author: ["Tov, Omer", "Alaluf, Yuval", "Nitzan, Yotam", "Patashnik, Or", "Cohen-Or, Daniel"]
+  date: 2021
+  url: https://arxiv.org/abs/2102.02766
+
+lpips:
+  type: article
+  title: "The Unreasonable Effectiveness of Deep Features as a Perceptual Metric"
+  author: ["Zhang, Richard", "Isola, Phillip", "Efros, Alexei A.", "Shechtman, Eli", "Wang, Oliver"]
+  date: 2018
+  url: https://arxiv.org/abs/1801.03924
+
+facenet:
+  type: article
+  title: "FaceNet: A Unified Embedding for Face Recognition and Clustering"
+  author: ["Schroff, Florian", "Kalenichenko, Dmitry", "Philbin, James"]
+  date: 2015
+  url: https://arxiv.org/abs/1503.03832

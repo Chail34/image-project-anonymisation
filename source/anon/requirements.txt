@@ -1,0 +1,38 @@
+# Environnement "riddle" du chiffreur latent (source/anon/), Python 3.11.
+# Versions relevées dans l'env conda riddle (Linux, RTX 5060 / sm_120, CUDA 12.8).
+# Les roues torch cu128 existent aussi pour Windows.
+#
+# Installation (Linux ou Windows) :
+#   conda create -n riddle python=3.11
+#   conda activate riddle
+#   pip install -r source/anon/requirements.txt
+#   pip install facenet-pytorch==2.6.0 --no-deps
+#
+# facenet-pytorch s'installe à part avec --no-deps : ses métadonnées imposent
+# un vieux torch et pip rétrograderait torch. Ses vraies dépendances
+# (numpy, Pillow, requests, tqdm, torch, torchvision) sont listées ici.
+#
+# Ne contient pas les poids : copier weights/ (et source/anon/runs/ pour
+# reprendre un entraînement depuis checkpoints/last.pt) à la main.
+
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.11.0
+torchvision==0.26.0
+
+numpy==2.4.6
+scipy==1.17.1
+pillow==12.3.0
+tqdm==4.70.1
+requests==2.34.2
+
+# LPIPS (pertes et éval)
+lpips==0.1.4
+
+# Alignement des visages dans invert_images.py (roue précompilée de dlib)
+dlib-bin==20.0.1.post1
+
+# Optionnel : MTCNN de facenet-pytorch (non utilisé par nos scripts)
+opencv-python==5.0.0.93
+
+# Figures du rapport (runs/exp*/eval/*.py)
+matplotlib==3.11.2
