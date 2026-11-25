@@ -1,10 +1,14 @@
 """Évaluation comparée de chiffreurs : ArcFace et FaceNet, LPIPS, distance latente.
 
 Même protocole que runs/exp1/eval et runs/exp2/eval : N latents de validation (les 2000 réservés à
-l'entraînement), 5 bonnes et 5 mauvaises clés fixes. Réalisme des mauvais déchiffrements : score du
+l'entraînement), --keys paires (bonne clé, mauvaise clé) fixes (5 par défaut). Réalisme des mauvais déchiffrements : score du
 discriminateur StyleGAN2 (D q, comparé aux vraies images) et part sous le 5e centile des vraies images (D q bas) ;
 pixels hors de [-1, 1] avant bornage (sat q). Env riddle. Un modèle dont le nom commence par
 « auteurs » est chargé comme le checkpoint des auteurs (authors_mapper.py).
+
+Avec --keys > 5, les 5 premières paires sont celles des anciennes évaluations (graine 1234), les suivantes sont tirées
+ensuite : les mesures moyennes changent, mais les clés 0-4 restent comparables. La fuite dépend de la clé (results.md
+§11) : regarder wrong_keys_leak (part des mauvaises clés dont le cosinus moyen dépasse le seuil) et wrong_per_key.
 
 python source/anon/eval_compare.py --out source/anon/runs/exp3/eval/eval.json \
        exp1_20k=source/anon/runs/exp1/checkpoints/last.pt exp3a=source/anon/runs/exp3a/checkpoints/last.pt
@@ -18,11 +22,12 @@ from losses import domain_stats
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 ap.add_argument("models", nargs="+", help="nom=chemin/du/checkpoint.pt")
 ap.add_argument("--n", type=int, default=512, help="nombre de visages de validation")
+ap.add_argument("--keys", type=int, default=5, help="nombre de paires (bonne clé, mauvaise clé) fixes ; les 5 premières sont toujours les mêmes")
 ap.add_argument("--out", default=None, help="fichier JSON des résultats")
 args = ap.parse_args()
 models = dict(m.split("=", 1) for m in args.models)
 
-N, P, B = args.n, 5, 8
+N, P, B = args.n, args.keys, 8
 dev = "cuda"
 torch.manual_seed(0)
 G, lp, D = ru.load_generator(), ru.load_lpips("vgg"), ru.load_discriminator()
@@ -34,7 +39,11 @@ MU, RAD = (t.to(dev) for t in domain_stats(lat[perm[:-2000]]))   # domaine des l
 del lat
 excess = lambda w: ((w - MU).norm(dim=-1) - RAD).clamp(min=0).mean(1)  # 0 dans le domaine
 g = torch.Generator(dev).manual_seed(1234)
-keys, wrong = ru.sample_password(G, P, generator=g), ru.sample_password(G, P, generator=g)
+P0 = min(P, 5)                                                      # 5 premières paires : mêmes tirages qu'avant --keys
+keys, wrong = ru.sample_password(G, 5, generator=g)[:P0], ru.sample_password(G, 5, generator=g)[:P0]
+if P > 5:
+    keys = torch.cat([keys, ru.sample_password(G, P - 5, generator=g)])
+    wrong = torch.cat([wrong, ru.sample_password(G, P - 5, generator=g)])
 
 @torch.no_grad()
 def run(f):
@@ -91,18 +100,25 @@ for name, path in models.items():
                     div=div.mean().item(), same_key=same_key.mean().item(),
                     deid_ok=(c_e < thr).float().mean().item(), rec_ok=(c_d > thr).float().mean().item(),
                     wrong_ok=(c_q < thr).float().mean().item(), div_ok=(div < thr).float().mean().item(),
-                    rec_min=c_d.min().item(), wrong_max=c_q.max().item(), wrong_p95=torch.quantile(c_q.flatten(), 0.95).item())
+                    rec_min=c_d.min().item(), wrong_max=c_q.max().item(), wrong_p95=torch.quantile(c_q.flatten(), 0.95).item(),
+                    # par clé (moyenne sur les visages) : une mauvaise clé peut fuir pour presque tous les visages
+                    wrong_keys_leak=(c_q.mean(0) > thr).float().mean().item(), wrong_key_max=c_q.mean(0).max().item(),
+                    rec_key_min=c_d.mean(0).min().item(),
+                    wrong_per_key=[round(v, 4) for v in c_q.mean(0).tolist()], rec_per_key=[round(v, 4) for v in c_d.mean(0).tolist()])
     res[name] = r
     print(name, json.dumps(r), flush=True)
+    if args.out:                                                # sauvegarde après chaque modèle (évaluation longue)
+        pathlib.Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        json.dump(res, open(args.out, "w"), indent=1)
     del m
 if args.out:
     pathlib.Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     json.dump(res, open(args.out, "w"), indent=1)
 print()
-print(f"{'modèle':<14}{'réseau':<9}{'chiffré↓':>9}{'déchiffré↑':>11}{'mauv. clé↓':>11}{'mauv. non reconnues↑':>22}{'2 clés↓':>9}{'LPIPS e↓':>10}{'LPIPS q':>9}{'dom q↓':>8}{'D q↑':>7}{'D q bas↓':>10}{'sat q↓':>9}")
+print(f"{'modèle':<14}{'réseau':<9}{'chiffré↓':>9}{'déchiffré↑':>11}{'mauv. clé↓':>11}{'mauv. non reconnues↑':>22}{'clés qui fuient↓':>17}{'2 clés↓':>9}{'LPIPS e↓':>10}{'LPIPS q':>9}{'dom q↓':>8}{'D q↑':>7}{'D q bas↓':>10}{'sat q↓':>9}")
 for name, r in res.items():
     if name.startswith("_"):
         continue
     for n in nets:
         m = r[n]
-        print(f"{name:<14}{n:<9}{m['deid']:>9.2f}{m['rec']:>11.2f}{m['wrong']:>11.2f}{100 * m['wrong_ok']:>21.1f}%{m['div']:>9.2f}{r['lpips_e']:>10.3f}{r['lpips_q']:>9.3f}{r['dom_q']:>8.2f}{r['d_q']:>7.2f}{100 * r['d_q_low']:>9.1f}%{100 * r.get('sat_q', 0):>8.2f}%")
+        print(f"{name:<14}{n:<9}{m['deid']:>9.2f}{m['rec']:>11.2f}{m['wrong']:>11.2f}{100 * m['wrong_ok']:>21.1f}%{100 * m.get('wrong_keys_leak', float('nan')):>16.1f}%{m['div']:>9.2f}{r['lpips_e']:>10.3f}{r['lpips_q']:>9.3f}{r['dom_q']:>8.2f}{r['d_q']:>7.2f}{100 * r['d_q_low']:>9.1f}%{100 * r.get('sat_q', 0):>8.2f}%")
